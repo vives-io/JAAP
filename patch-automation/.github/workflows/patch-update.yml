@@ -1,0 +1,356 @@
+name: Automated Patch Update
+
+on:
+  # Scheduled trigger - Every Thursday at 9 AM
+  schedule:
+    - cron: '0 9 * * 4'
+  
+  # Manual trigger with options
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'Application to update (or "all" for all apps)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - 'all'
+        - '1password'
+        - 'chrome'
+        - 'firefox'
+        - 'slack'
+        - 'zoom'
+        - 'docker'
+        - 'vscode'
+        - 'notion'
+        - 'spotify'
+        - 'discord'
+        - 'vlc'
+        - 'microsoftoffice'
+        - 'adobecreativecloud'
+        - 'the_unarchiver'
+        - 'malwarebytes'
+      
+      patch_cycle:
+        description: 'Patch cycle to deploy to'
+        required: false
+        default: 'Thursday 1'
+        type: choice
+        options:
+        - 'Thursday 1'
+        - 'Thursday 2'
+        - 'Thursday 3'
+        - 'Thursday 4'
+      
+      dry_run:
+        description: 'Run in dry-run mode (no actual deployment)'
+        required: false
+        default: false
+        type: boolean
+      
+      force_download:
+        description: 'Force download even if cached'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  patch-update:
+    name: Process Patch Updates
+    runs-on: self-hosted
+    timeout-minutes: 180  # 3 hours max
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create required directories
+      run: |
+        mkdir -p logs cache state packages
+    
+    - name: Validate environment
+      run: |
+        echo "Validating environment..."
+        python -c "
+        import os
+        required_vars = ['JAMF_URL', 'JAMF_USERNAME', 'JAMF_PASSWORD']
+        missing = [var for var in required_vars if not os.getenv(var)]
+        if missing:
+            print(f'Missing required environment variables: {missing}')
+            exit(1)
+        else:
+            print('✓ All required environment variables present')
+        "
+      env:
+        JAMF_URL: ${{ secrets.JAMF_URL }}
+        JAMF_USERNAME: ${{ secrets.JAMF_USERNAME }}
+        JAMF_PASSWORD: ${{ secrets.JAMF_PASSWORD }}
+    
+    - name: Test Jamf connectivity
+      run: |
+        python -c "
+        from scripts.patch_management import JamfPatchManager
+        import os
+        try:
+            manager = JamfPatchManager(
+                jamf_url=os.getenv('JAMF_URL'),
+                username=os.getenv('JAMF_USERNAME'),
+                password=os.getenv('JAMF_PASSWORD')
+            )
+            print('✓ Successfully connected to Jamf Pro')
+            manager.close()
+        except Exception as e:
+            print(f'✗ Jamf connectivity test failed: {e}')
+            exit(1)
+        "
+      env:
+        JAMF_URL: ${{ secrets.JAMF_URL }}
+        JAMF_USERNAME: ${{ secrets.JAMF_USERNAME }}
+        JAMF_PASSWORD: ${{ secrets.JAMF_PASSWORD }}
+    
+    - name: Run patch automation
+      id: patch_automation
+      run: |
+        echo "Starting patch automation workflow..."
+        
+        # Set default values for scheduled runs
+        APP_NAME="${{ github.event.inputs.app_name || 'all' }}"
+        PATCH_CYCLE="${{ github.event.inputs.patch_cycle || 'Thursday 1' }}"
+        DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+        FORCE_DOWNLOAD="${{ github.event.inputs.force_download || 'false' }}"
+        
+        echo "Configuration:"
+        echo "  Application: $APP_NAME"
+        echo "  Patch Cycle: $PATCH_CYCLE"
+        echo "  Dry Run: $DRY_RUN"
+        echo "  Force Download: $FORCE_DOWNLOAD"
+        echo ""
+        
+        # Build command arguments
+        ARGS="--apps $APP_NAME --cycle \"$PATCH_CYCLE\""
+        
+        if [ "$DRY_RUN" = "true" ]; then
+          ARGS="$ARGS --dry-run"
+        fi
+        
+        if [ "$FORCE_DOWNLOAD" = "true" ]; then
+          ARGS="$ARGS --force"
+        fi
+        
+        if [ "${{ runner.debug }}" = "1" ]; then
+          ARGS="$ARGS --verbose"
+        fi
+        
+        # Run the workflow
+        echo "Executing: python scripts/workflow_orchestrator.py $ARGS"
+        python scripts/workflow_orchestrator.py $ARGS > workflow_output.json
+        
+        # Check if workflow succeeded
+        if [ $? -eq 0 ]; then
+          echo "workflow_status=success" >> $GITHUB_OUTPUT
+          echo "✅ Patch automation completed successfully"
+        else
+          echo "workflow_status=failure" >> $GITHUB_OUTPUT
+          echo "❌ Patch automation failed"
+          exit 1
+        fi
+        
+      env:
+        JAMF_URL: ${{ secrets.JAMF_URL }}
+        JAMF_USERNAME: ${{ secrets.JAMF_USERNAME }}
+        JAMF_PASSWORD: ${{ secrets.JAMF_PASSWORD }}
+        TITLE_EDITOR_URL: ${{ secrets.TITLE_EDITOR_URL }}
+        TITLE_EDITOR_TOKEN: ${{ secrets.TITLE_EDITOR_TOKEN }}
+        LOG_LEVEL: ${{ runner.debug == '1' && 'DEBUG' || 'INFO' }}
+    
+    - name: Parse results
+      id: parse_results
+      if: always()
+      run: |
+        if [ -f workflow_output.json ]; then
+          # Extract key metrics
+          COMPLETED_APPS=$(jq -r '.completed_apps // 0' workflow_output.json)
+          FAILED_APPS=$(jq -r '.failed_apps // 0' workflow_output.json)
+          RUNTIME=$(jq -r '.runtime_seconds // 0' workflow_output.json)
+          WORKFLOW_ID=$(jq -r '.workflow_id // "unknown"' workflow_output.json)
+          
+          echo "completed_apps=$COMPLETED_APPS" >> $GITHUB_OUTPUT
+          echo "failed_apps=$FAILED_APPS" >> $GITHUB_OUTPUT
+          echo "runtime_seconds=$RUNTIME" >> $GITHUB_OUTPUT
+          echo "workflow_id=$WORKFLOW_ID" >> $GITHUB_OUTPUT
+          
+          echo "Results Summary:"
+          echo "  Workflow ID: $WORKFLOW_ID"
+          echo "  Completed: $COMPLETED_APPS applications"
+          echo "  Failed: $FAILED_APPS applications"
+          echo "  Runtime: ${RUNTIME}s"
+        else
+          echo "completed_apps=0" >> $GITHUB_OUTPUT
+          echo "failed_apps=1" >> $GITHUB_OUTPUT
+          echo "runtime_seconds=0" >> $GITHUB_OUTPUT
+          echo "workflow_id=failed" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Upload workflow results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: patch-automation-results-${{ github.run_number }}
+        path: |
+          workflow_output.json
+          logs/*.log
+          state/*.json
+        retention-days: 30
+    
+    - name: Upload cache statistics
+      if: always()
+      run: |
+        echo "Cache Statistics:" > cache_stats.txt
+        echo "================" >> cache_stats.txt
+        if [ -d cache ]; then
+          echo "Cache directory size: $(du -sh cache | cut -f1)" >> cache_stats.txt
+          echo "Number of cached files: $(find cache -type f | wc -l)" >> cache_stats.txt
+          echo "" >> cache_stats.txt
+          echo "Cache contents:" >> cache_stats.txt
+          find cache -type f -exec ls -lh {} \; >> cache_stats.txt
+        else
+          echo "No cache directory found" >> cache_stats.txt
+        fi
+    
+    - name: Cleanup old cache files
+      if: always()
+      run: |
+        # Clean up cache files older than 30 days
+        if [ -d cache ]; then
+          find cache -type f -mtime +30 -delete || true
+          echo "Cleaned up old cache files"
+        fi
+        
+        # Clean up old log files
+        if [ -d logs ]; then
+          find logs -name "*.log" -mtime +90 -delete || true
+          echo "Cleaned up old log files"
+        fi
+        
+        # Clean up old state files
+        if [ -d state ]; then
+          find state -name "*.json" -mtime +30 -delete || true
+          echo "Cleaned up old state files"
+        fi
+    
+    - name: Create summary
+      if: always()
+      run: |
+        echo "## 📦 Patch Automation Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.patch_automation.outputs.workflow_status }}" = "success" ]; then
+          echo "### ✅ Workflow Completed Successfully" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ Workflow Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Workflow ID | \`${{ steps.parse_results.outputs.workflow_id }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| Applications Processed | ${{ steps.parse_results.outputs.completed_apps }} ✅ / ${{ steps.parse_results.outputs.failed_apps }} ❌ |" >> $GITHUB_STEP_SUMMARY
+        echo "| Runtime | ${{ steps.parse_results.outputs.runtime_seconds }}s |" >> $GITHUB_STEP_SUMMARY
+        echo "| Dry Run | ${{ github.event.inputs.dry_run || 'false' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f workflow_output.json ]; then
+          echo "### 📊 Detailed Results" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+          cat workflow_output.json | jq '.' >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Notify on failure
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const issue_body = `
+          ## 🚨 Patch Automation Failure
+          
+          **Workflow:** ${{ github.workflow }}
+          **Run:** ${{ github.run_number }}
+          **Failed at:** ${new Date().toISOString()}
+          
+          **Configuration:**
+          - Application: ${{ github.event.inputs.app_name || 'all' }}
+          - Patch Cycle: ${{ github.event.inputs.patch_cycle || 'Thursday 1' }}
+          - Dry Run: ${{ github.event.inputs.dry_run || 'false' }}
+          
+          **Failed Apps:** ${{ steps.parse_results.outputs.failed_apps }}
+          **Completed Apps:** ${{ steps.parse_results.outputs.completed_apps }}
+          
+          Please check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+          
+          /cc @${{ github.actor }}
+          `;
+          
+          // Create an issue for failures (optional)
+          // Uncomment if you want automatic issue creation
+          /*
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `Patch Automation Failure - ${new Date().toLocaleDateString()}`,
+            body: issue_body,
+            labels: ['automation', 'patch-management', 'failure']
+          });
+          */
+          
+          console.log('Workflow failed. Issue body prepared:', issue_body);
+    
+    # Optional: Send Slack notification
+    - name: Slack notification
+      if: always() && env.SLACK_WEBHOOK_URL
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#it-alerts'
+        text: |
+          Patch Automation ${{ job.status == 'success' && '✅ Completed' || '❌ Failed' }}
+          
+          Apps: ${{ steps.parse_results.outputs.completed_apps }} ✅ / ${{ steps.parse_results.outputs.failed_apps }} ❌
+          Runtime: ${{ steps.parse_results.outputs.runtime_seconds }}s
+          Dry Run: ${{ github.event.inputs.dry_run || 'false' }}
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Optional: Additional job for emergency deployments
+  emergency-patch:
+    if: github.event.inputs.app_name && contains(github.event.inputs.app_name, 'emergency')
+    name: Emergency Security Patch
+    runs-on: self-hosted
+    timeout-minutes: 60
+    
+    steps:
+    - name: Emergency deployment
+      run: |
+        echo "🚨 Emergency patch deployment triggered"
+        # Implementation for emergency patches
+        # This would bypass normal patch cycles
+    
+    - name: Notify security team
+      run: |
+        echo "Notifying security team of emergency patch deployment"
+        # Implementation for emergency notifications

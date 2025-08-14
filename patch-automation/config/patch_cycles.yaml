@@ -1,0 +1,189 @@
+# Patch Cycle Configuration
+# Smart group-based phased deployment schedule
+
+# Patch cycles configuration
+cycles:
+  - name: "Thursday 1"
+    description: "First deployment group - IT test machines"
+    smart_group: "Patch_Cycle_Thu1" 
+    week: 1
+    deployment_day: "Thursday"
+    time: "09:00"
+    user_interaction:
+      allow_deferral: true
+      deferral_period_days: 7
+      grace_period_minutes: 15
+      message_start: "Software updates are available. Please save your work."
+      message_finish: "Updates complete. Please restart if prompted."
+    
+  - name: "Thursday 2"
+    description: "Second deployment group - Early adopters"
+    smart_group: "Patch_Cycle_Thu2"
+    week: 2
+    deployment_day: "Thursday"
+    time: "09:00"
+    user_interaction:
+      allow_deferral: true
+      deferral_period_days: 5
+      grace_period_minutes: 15
+      message_start: "Software updates are available. Please save your work."
+      message_finish: "Updates complete. Please restart if prompted."
+    
+  - name: "Thursday 3"
+    description: "Third deployment group - General users"
+    smart_group: "Patch_Cycle_Thu3"
+    week: 3
+    deployment_day: "Thursday"
+    time: "09:00"
+    user_interaction:
+      allow_deferral: true
+      deferral_period_days: 3
+      grace_period_minutes: 10
+      message_start: "Important software updates are being installed."
+      message_finish: "Updates complete. Please restart if prompted."
+    
+  - name: "Thursday 4"
+    description: "Final deployment group - All remaining machines"
+    smart_group: "Patch_Cycle_Thu4"
+    week: 4
+    deployment_day: "Thursday"
+    time: "09:00"
+    user_interaction:
+      allow_deferral: false
+      deferral_period_days: 0
+      grace_period_minutes: 5
+      message_start: "Required software updates are being installed."
+      message_finish: "Updates complete. Please restart if prompted."
+
+# Smart group criteria examples for reference
+smart_group_templates:
+  patch_cycle_thu1:
+    name: "Patch_Cycle_Thu1"
+    criteria:
+      - name: "Department"
+        operator: "is"
+        value: "IT"
+      - name: "Computer Name"
+        operator: "like"
+        value: "*-TEST-*"
+    
+  patch_cycle_thu2:
+    name: "Patch_Cycle_Thu2" 
+    criteria:
+      - name: "Department"
+        operator: "is not"
+        value: "IT"
+      - name: "User"
+        operator: "member of"
+        value: "Early Adopters"
+    
+  patch_cycle_thu3:
+    name: "Patch_Cycle_Thu3"
+    criteria:
+      - name: "Department"
+        operator: "is"
+        value: "Marketing"
+      - name: "Department"
+        operator: "is"
+        value: "Sales"
+    
+  patch_cycle_thu4:
+    name: "Patch_Cycle_Thu4"
+    criteria:
+      - name: "Computer Group"
+        operator: "is not member of"
+        value: "Patch_Cycle_Thu1"
+      - name: "Computer Group"
+        operator: "is not member of"
+        value: "Patch_Cycle_Thu2"
+      - name: "Computer Group"
+        operator: "is not member of"
+        value: "Patch_Cycle_Thu3"
+
+# Notification settings
+notifications:
+  email:
+    enabled: true
+    recipients:
+      - "it-admin@company.com"
+      - "security@company.com"
+    events:
+      - "deployment_start"
+      - "deployment_complete"
+      - "deployment_failed"
+  
+  slack:
+    enabled: false
+    webhook_url: ""
+    channel: "#it-alerts"
+    events:
+      - "deployment_failed"
+
+# Emergency deployment settings
+emergency:
+  # Override normal cycles for critical security patches
+  enabled: false
+  smart_group: "All Managed Computers"
+  user_interaction:
+    allow_deferral: false
+    grace_period_minutes: 2
+    message_start: "Critical security update is being installed immediately."
+    message_finish: "Security update complete. Restart required."
+
+# Application-specific overrides
+application_overrides:
+  # Some apps might need different deployment schedules
+  chrome:
+    # Chrome updates more frequently, use accelerated schedule
+    cycles:
+      - name: "Thu1_Chrome"
+        smart_group: "Patch_Cycle_Thu1"
+        week: 1
+      - name: "Thu2_Chrome"
+        smart_group: "Patch_Cycle_Thu2,Patch_Cycle_Thu3,Patch_Cycle_Thu4"
+        week: 2  # Skip week 3 and 4 for Chrome
+  
+  microsoftoffice:
+    # Office updates need more testing time
+    cycles:
+      - name: "Thu1_Office"
+        smart_group: "Patch_Cycle_Thu1"
+        week: 1
+      - name: "Thu2_Office"
+        smart_group: "Patch_Cycle_Thu2"
+        week: 2
+      - name: "Thu3_Office"
+        smart_group: "Patch_Cycle_Thu3"
+        week: 3
+      - name: "Thu4_Office"
+        smart_group: "Patch_Cycle_Thu4"
+        week: 4
+    user_interaction:
+      grace_period_minutes: 30  # More time for Office saves
+
+# Maintenance windows
+maintenance_windows:
+  # Times when deployments are allowed
+  weekdays:
+    monday:
+      start: "09:00"
+      end: "17:00"
+    tuesday:
+      start: "09:00" 
+      end: "17:00"
+    wednesday:
+      start: "09:00"
+      end: "17:00"
+    thursday:
+      start: "09:00"
+      end: "17:00"
+    friday:
+      start: "09:00"
+      end: "15:00"  # Earlier end on Friday
+  
+  # Blackout periods (no deployments)
+  blackout_dates:
+    - "2024-12-24"  # Christmas Eve
+    - "2024-12-25"  # Christmas
+    - "2024-12-31"  # New Year's Eve
+    - "2024-01-01"  # New Year's Day

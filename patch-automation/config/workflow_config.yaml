@@ -1,0 +1,271 @@
+# Workflow Configuration
+# Settings for automation timing, retries, and performance
+
+# Execution settings
+execution:
+  # Maximum time for entire workflow (in minutes)
+  max_workflow_time: 120
+  
+  # Maximum time per application (in minutes)
+  max_app_time: 30
+  
+  # Parallel processing
+  parallel_downloads: true
+  max_parallel_workers: 5
+  
+  # Timeout settings
+  download_timeout_seconds: 600  # 10 minutes
+  upload_timeout_seconds: 1800   # 30 minutes
+  api_timeout_seconds: 60        # 1 minute
+
+# Retry configuration
+retry:
+  # Number of retry attempts
+  max_retries: 3
+  
+  # Exponential backoff settings
+  initial_delay_seconds: 1
+  max_delay_seconds: 300  # 5 minutes
+  backoff_multiplier: 2
+  
+  # Retry on these error types
+  retry_on_errors:
+    - "ConnectionError"
+    - "Timeout" 
+    - "HTTPError"
+    - "TransientError"
+  
+  # Don't retry on these errors
+  no_retry_errors:
+    - "AuthenticationError"
+    - "ValidationError"
+    - "FileNotFoundError"
+
+# Caching configuration
+cache:
+  # Cache directory
+  cache_dir: "cache"
+  
+  # Maximum cache age (in days)
+  max_age_days: 30
+  
+  # Cache cleanup frequency (in days)
+  cleanup_interval_days: 7
+  
+  # Maximum cache size (in GB)
+  max_size_gb: 50
+  
+  # Cache validation
+  validate_checksums: true
+  use_etag_caching: true
+  use_last_modified: true
+
+# Logging configuration
+logging:
+  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"
+  
+  # Log file settings
+  log_dir: "logs"
+  max_file_size_mb: 100
+  backup_count: 10
+  
+  # Log formats
+  console_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_format: "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s"
+  
+  # Component-specific log levels
+  component_levels:
+    package_downloader: "INFO"
+    package_processor: "INFO" 
+    patch_management: "INFO"
+    title_editor_sync: "INFO"
+    application_registry: "INFO"
+
+# Performance monitoring
+monitoring:
+  # Enable performance metrics collection
+  enabled: true
+  
+  # Metrics to collect
+  collect_metrics:
+    - "download_speed"
+    - "processing_time"
+    - "cache_hit_rate"
+    - "api_response_time"
+    - "memory_usage"
+    - "disk_usage"
+  
+  # Performance thresholds for alerts
+  thresholds:
+    max_download_time_minutes: 15
+    min_cache_hit_rate_percent: 70
+    max_memory_usage_mb: 2048
+    max_disk_usage_gb: 20
+
+# Security settings
+security:
+  # Package verification
+  verify_signatures: true
+  verify_team_ids: true
+  verify_checksums: true
+  
+  # Allowed Team IDs (empty means use app-specific settings)
+  allowed_team_ids: []
+  
+  # Quarantine handling
+  remove_quarantine: true
+  
+  # SSL/TLS settings
+  verify_ssl: true
+  min_tls_version: "1.2"
+
+# GitHub Actions integration
+github_actions:
+  # Workflow file
+  workflow_file: ".github/workflows/patch-update.yml"
+  
+  # Schedule (cron format)
+  schedule: "0 9 * * 4"  # Every Thursday at 9 AM
+  
+  # Timeout for GitHub Actions job (in minutes)
+  job_timeout: 180
+  
+  # Artifact settings
+  artifacts:
+    enabled: true
+    retention_days: 30
+    include_logs: true
+    include_metrics: true
+
+# Jamf integration settings
+jamf:
+  # API rate limiting
+  rate_limit_requests_per_minute: 30
+  
+  # Batch sizes
+  max_batch_size: 10
+  
+  # Policy creation settings
+  policy_category: "Patch Management"
+  policy_priority: 5
+  
+  # Distribution point settings
+  prefer_jcds: true
+  jcds_mode: false  # Set to true for packages > 5GB
+  
+  # Package naming convention
+  package_naming: "{name}-{version}.{ext}"
+
+# Title Editor settings
+title_editor:
+  # Enable Title Editor integration
+  enabled: false
+  
+  # API settings
+  api_base_url: ""
+  api_token: ""
+  
+  # Rate limiting
+  requests_per_minute: 20
+  
+  # Automatic definition creation
+  auto_create_definitions: true
+  
+  # Definition defaults
+  default_minimum_os: "10.15"
+  default_reboot_required: false
+
+# Environment-specific settings
+environment:
+  # Current environment (development, staging, production)
+  name: "production"
+  
+  # Development settings
+  development:
+    dry_run_default: true
+    verbose_logging: true
+    skip_verification: false
+    
+  # Production settings  
+  production:
+    dry_run_default: false
+    verbose_logging: false
+    skip_verification: false
+
+# Application filtering
+filtering:
+  # Only process these applications (empty = all)
+  include_apps: []
+  
+  # Skip these applications
+  exclude_apps: []
+  
+  # Only process apps with updates available
+  only_if_updates_available: true
+  
+  # Skip apps that have been updated recently (in days)
+  skip_if_updated_within_days: 1
+
+# State management
+state:
+  # State file location
+  state_file: "state/workflow_state.json"
+  
+  # Enable state persistence
+  persist_state: true
+  
+  # Resume from previous state on startup
+  resume_on_startup: true
+  
+  # State cleanup (in days)
+  cleanup_old_state_days: 30
+
+# Email notifications
+email:
+  # SMTP settings (if not using GitHub Actions notifications)
+  enabled: false
+  smtp_server: ""
+  smtp_port: 587
+  username: ""
+  password: ""
+  
+  # Recipients
+  recipients:
+    success: ["admin@company.com"]
+    failure: ["admin@company.com", "oncall@company.com"]
+  
+  # Email templates
+  templates:
+    success_subject: "Patch automation completed successfully"
+    failure_subject: "Patch automation failed - Action required"
+
+# Cleanup settings
+cleanup:
+  # Clean up temporary files
+  cleanup_temp_files: true
+  
+  # Clean up old packages
+  cleanup_old_packages: true
+  cleanup_age_days: 30
+  
+  # Clean up logs
+  cleanup_old_logs: true
+  log_retention_days: 90
+  
+  # Clean up state files
+  cleanup_old_state: true
+  state_retention_days: 30
+
+# Feature flags
+features:
+  # Enable experimental features
+  experimental_parallel_processing: false
+  experimental_smart_retry: false
+  experimental_predictive_caching: false
+  
+  # Enable/disable components
+  enable_title_editor_sync: false
+  enable_metrics_collection: true
+  enable_auto_cleanup: true
+  enable_smart_caching: true

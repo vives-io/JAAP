@@ -1,0 +1,333 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# APPLICATION CONFIGURATION REFERENCE
+# ═══════════════════════════════════════════════════════════════════════════════
+# 
+# This file defines application configurations for automated patch management.
+# Each application is identified by a unique label (key) and contains metadata
+# for downloading, processing, and deploying updates through Jamf Pro.
+#
+# ───────────────────────────────────────────────────────────────────────────────
+# REQUIRED FIELDS (must be present for every application)
+# ───────────────────────────────────────────────────────────────────────────────
+#
+# name:             Display name of the application (string)
+#                   Example: "1Password 8", "Google Chrome"
+#
+# bundle_id:        macOS bundle identifier (reverse DNS notation)
+#                   Example: "com.1password.1password", "com.google.Chrome"
+#                   Used for: Package verification, Jamf smart groups
+#
+# team_id:          Apple Developer Team ID (10-character string)
+#                   Example: "2BUA8C4S2C", "EQHXZ8M8AV"
+#                   Used for: Code signature verification, security validation
+#                   Find with: codesign -dv /Applications/App.app 2>&1 | grep TeamIdentifier
+#
+# download_type:    Method for obtaining download URL (enum)
+#                   Options:
+#                     - "direct": Static download URL
+#                     - "github": GitHub Releases API  
+#                     - "sparkle": Sparkle update feed (XML)
+#                     - "json_api": Custom JSON API endpoint
+#                     - "web_scraper": HTML scraping with regex
+#
+# package_type:     Format of the downloaded package (enum)
+#                   Options: "dmg", "pkg", "zip", "script"
+#
+# patch_title:      Exact name of Jamf Pro patch software title (string)
+#                   Must match the title in Jamf Pro > Patch Management
+#                   Example: "1Password 8", "Google Chrome"
+#
+# ───────────────────────────────────────────────────────────────────────────────
+# DOWNLOAD CONFIGURATION (varies by download_type)
+# ───────────────────────────────────────────────────────────────────────────────
+#
+# FOR download_type: "direct"
+# ──────────────────────────
+# download_url:         Static URL to download the package
+# download_url_x86_64:  Optional Intel-specific URL (if different from ARM)
+# download_url_arm64:   Optional Apple Silicon-specific URL
+#
+# FOR download_type: "github"
+# ──────────────────────────
+# github_repo:          GitHub repository in format "owner/repo"
+#                        Example: "microsoft/vscode", "docker/docker"
+#
+# FOR download_type: "sparkle"
+# ──────────────────────────
+# sparkle_feed_url:     URL to Sparkle update feed (appcast.xml)
+#                        Example: "https://example.com/appcast.xml"
+#
+# FOR download_type: "json_api"
+# ──────────────────────────
+# api_url:              JSON API endpoint URL
+# version_selector:     JSONPath to version field (e.g., "version", "data.latest")
+# url_selector:         JSONPath to download URL field
+#
+# FOR download_type: "web_scraper"
+# ──────────────────────────
+# scrape_url:           Web page to scrape
+# url_pattern:          Regex pattern to extract download URL (group 1)
+# version_pattern:      Optional regex to extract version (group 1)
+#
+# ───────────────────────────────────────────────────────────────────────────────
+# OPTIONAL FIELDS
+# ───────────────────────────────────────────────────────────────────────────────
+#
+# minimum_os:       Minimum macOS version (string)
+#                   Example: "10.15", "11.0", "12.0"
+#                   Used for: Jamf patch definitions, compatibility checks
+#
+# description:      Human-readable description (string)
+#                   Example: "Password manager and secure digital wallet"
+#
+# filename:         Override downloaded filename (string)
+#                   Default: Extracted from URL or Content-Disposition header
+#
+# version:          Override version detection (string)
+#                   Default: Extracted from package metadata or API
+#
+# ───────────────────────────────────────────────────────────────────────────────
+# ADVANCED CONFIGURATION
+# ───────────────────────────────────────────────────────────────────────────────
+#
+# kill_apps:        List of bundle IDs to quit during update
+#                   Example: ["com.1password.1password", "com.1password.launcher"]
+#
+# reboot_required:  Whether update requires restart (boolean)
+#                   Default: false
+#
+# repackage_as_pkg: Convert DMG/ZIP to PKG format (boolean)
+#                   Default: false
+#
+# vendor_config:    Vendor-specific settings (object)
+#                   Example:
+#                     check_beta: false
+#                     include_prerelease: false
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EXAMPLE CONFIGURATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── EXAMPLE: Direct Download (most common) ───────────────────────────────────
+1password:
+  name: "1Password 8"                                         # Display name
+  bundle_id: "com.1password.1password"                       # macOS bundle ID
+  team_id: "2BUA8C4S2C"                                      # Apple Developer Team ID
+  download_type: "direct"                                     # Static download URL
+  download_url: "https://downloads.1password.com/mac/1Password.pkg"  # Package URL
+  package_type: "pkg"                                         # Package format
+  patch_title: "1Password 8"                                  # Jamf patch title (exact match)
+  minimum_os: "10.15"                                         # Minimum macOS version
+  description: "Password manager and secure digital wallet"   # Human description
+
+# ─── EXAMPLE: Direct Download with Architecture Support ───────────────────────
+chrome:
+  name: "Google Chrome"
+  bundle_id: "com.google.Chrome"
+  team_id: "EQHXZ8M8AV"
+  download_type: "direct"
+  download_url: "https://dl.google.com/chrome/mac/stable/GGRO/googlechrome.dmg"
+  package_type: "dmg"
+  patch_title: "Google Chrome"
+  minimum_os: "10.13"
+  description: "Web browser by Google"
+
+# ─── EXAMPLE: Architecture-Specific URLs ──────────────────────────────────────
+slack:
+  name: "Slack"
+  bundle_id: "com.tinyspeck.slackmacgap"
+  team_id: "BQR82RBBHL"
+  download_type: "direct"
+  download_url: "https://slack.com/ssb/download-osx-silicon"      # Apple Silicon default
+  download_url_x86_64: "https://slack.com/ssb/download-osx"       # Intel override
+  package_type: "dmg"
+  patch_title: "Slack"
+  minimum_os: "10.11"
+  description: "Team collaboration and messaging"
+
+# ─── EXAMPLE: GitHub Releases API ─────────────────────────────────────────────
+vscode:
+  name: "Visual Studio Code"
+  bundle_id: "com.microsoft.VSCode" 
+  team_id: "UBF8T346G9"
+  download_type: "github"                                     # Use GitHub API
+  github_repo: "microsoft/vscode"                             # Repository path
+  package_type: "zip"
+  patch_title: "Microsoft Visual Studio Code"
+  minimum_os: "10.11"
+  description: "Code editor by Microsoft"
+
+# ─── EXAMPLE: Web Scraping with Regex ─────────────────────────────────────────
+vlc:
+  name: "VLC Media Player"
+  bundle_id: "org.videolan.vlc"
+  team_id: "75GAHG3SZQ"
+  download_type: "web_scraper"                                # Scrape web page
+  scrape_url: "https://www.videolan.org/vlc/download-macosx.html"  # Page to scrape
+  url_pattern: 'href="(https://get\.videolan\.org/vlc/[^"]*\.dmg)"'  # Regex pattern
+  package_type: "dmg"
+  patch_title: "VLC media player"
+  minimum_os: "10.7"
+  description: "Open source media player"
+
+# ─── EXAMPLE: Command Line Tool (no Team ID) ──────────────────────────────────
+homebrew:
+  name: "Homebrew"
+  bundle_id: "sh.brew.homebrew"
+  team_id: ""                                                 # No Team ID for CLI tools
+  download_type: "github"
+  github_repo: "Homebrew/brew"
+  package_type: "script"
+  patch_title: "Homebrew"
+  minimum_os: "10.13"
+  description: "Package manager for macOS"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRODUCTION APPLICATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+firefox:
+  name: "Mozilla Firefox"
+  bundle_id: "org.mozilla.firefox"
+  team_id: "43AQ936H96"
+  download_type: "direct"
+  download_url: "https://download.mozilla.org/?product=firefox-latest&os=osx&lang=en-US"
+  package_type: "dmg"
+  patch_title: "Mozilla Firefox"
+  minimum_os: "10.12"
+  description: "Open source web browser"
+
+zoom:
+  name: "Zoom"
+  bundle_id: "us.zoom.xos"
+  team_id: "BJ4HAAB9B3"
+  download_type: "direct"
+  download_url: "https://zoom.us/client/latest/ZoomInstaller.pkg"
+  package_type: "pkg"
+  patch_title: "Zoom"
+  minimum_os: "10.10"
+  description: "Video conferencing and web conferencing"
+
+docker:
+  name: "Docker Desktop"
+  bundle_id: "com.docker.docker"
+  team_id: "9BNSXJN65R"
+  download_type: "direct"
+  download_url: "https://desktop.docker.com/mac/main/arm64/Docker.dmg"
+  download_url_x86_64: "https://desktop.docker.com/mac/main/amd64/Docker.dmg"
+  package_type: "dmg"
+  patch_title: "Docker Desktop"
+  minimum_os: "10.14"
+  description: "Container runtime and development tools"
+
+notion:
+  name: "Notion"
+  bundle_id: "notion.id"
+  team_id: "LBQJ5QBXR8"
+  download_type: "direct"
+  download_url: "https://www.notion.so/desktop/mac/download"
+  package_type: "dmg"
+  patch_title: "Notion"
+  minimum_os: "10.13"
+  description: "Note-taking and productivity app"
+
+spotify:
+  name: "Spotify"
+  bundle_id: "com.spotify.client"
+  team_id: "2FNC3A47ZF"
+  download_type: "direct"
+  download_url: "https://download.scdn.co/SpotifyInstaller.zip"
+  package_type: "zip"
+  patch_title: "Spotify"
+  minimum_os: "10.10"
+  description: "Music streaming service"
+
+discord:
+  name: "Discord"
+  bundle_id: "com.hnc.Discord"
+  team_id: "53Q6R32WPB"
+  download_type: "direct"
+  download_url: "https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=osx&arch=x64"
+  package_type: "dmg"
+  patch_title: "Discord"
+  minimum_os: "10.11"
+  description: "Voice and text chat for gamers"
+
+# Enterprise Applications
+microsoftoffice:
+  name: "Microsoft Office"
+  bundle_id: "com.microsoft.office"
+  team_id: "UBF8T346G9"
+  download_type: "direct"
+  download_url: "https://go.microsoft.com/fwlink/?linkid=525133"
+  package_type: "pkg"
+  patch_title: "Microsoft Office"
+  minimum_os: "10.12"
+  description: "Microsoft Office productivity suite"
+
+adobecreativecloud:
+  name: "Adobe Creative Cloud"
+  bundle_id: "com.adobe.acc.AdobeCreativeCloud"
+  team_id: "JQ525L2MZD"
+  download_type: "direct"
+  download_url: "https://ccmdls.adobe.com/AdobeProducts/KCCC/CCD/5_5_0/osx10-64/ACCCx5_5_0_556.dmg"
+  package_type: "dmg"
+  patch_title: "Adobe Creative Cloud Desktop App"
+  minimum_os: "10.13"
+  description: "Adobe Creative Cloud desktop application"
+
+# Utilities
+the_unarchiver:
+  name: "The Unarchiver"
+  bundle_id: "cx.c3.theunarchiver"
+  team_id: "JRPU3G68NS"
+  download_type: "direct"
+  download_url: "https://theunarchiver.com/downloads/TheUnarchiver5.0.dmg"
+  package_type: "dmg"
+  patch_title: "The Unarchiver"
+  minimum_os: "10.13"
+  description: "Archive extraction utility"
+
+# Security Tools
+malwarebytes:
+  name: "Malwarebytes"
+  bundle_id: "com.malwarebytes.mbam"
+  team_id: "GVZRY6KDKR"
+  download_type: "direct"
+  download_url: "https://downloads.malwarebytes.com/file/mb4_mac"
+  package_type: "pkg"
+  patch_title: "Malwarebytes for Mac"
+  minimum_os: "10.12"
+  description: "Anti-malware protection"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ADDING NEW APPLICATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# To add a new application:
+#
+# 1. Choose a unique label (key) - use lowercase, no spaces
+# 2. Fill in all required fields
+# 3. Choose appropriate download_type and add related fields
+# 4. Test the configuration:
+#    python3 scripts/application_registry.py --validate your_app_name
+#    python3 scripts/application_registry.py --download-info your_app_name
+# 5. Test the full workflow:
+#    python3 scripts/workflow_orchestrator.py --apps your_app_name --dry-run
+#
+# Example template:
+# ──────────────────
+# your_new_app:
+#   name: "Your New App"
+#   bundle_id: "com.company.app"
+#   team_id: "ABCD123456"
+#   download_type: "direct"
+#   download_url: "https://company.com/download/app.dmg"
+#   package_type: "dmg"
+#   patch_title: "Your New App"
+#   minimum_os: "10.15"
+#   description: "Description of what the app does"
+#
+# ═══════════════════════════════════════════════════════════════════════════════
